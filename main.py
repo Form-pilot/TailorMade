@@ -7,6 +7,7 @@ from models import AIModel
 from templates import john_doe_resume
 
 from log import logger
+from config import APPLICANT_NAME
 
 app = FastAPI()
 
@@ -43,11 +44,15 @@ def generate_tailored_latex_resume_save(job_description: str, resume: str = john
     Gets resume and job description in plain text and saves tailored resume
     """
     tailored_plain_resume = generate_tailored_plain_resume(resume, job_description, model, template)
-    latex_compiler_reponse, _ = openai_wrapper.covert_plain_resume_to_latex(tailored_plain_resume, model, template)
     company_name = openai_wrapper.ai_prompt(f"Give the name of the company that this job description is for. As the output just give the name, nothing else. Job description: {job_description}")  # Since this is a simple task we use the cheapest ai
-    with open(f'./CVs/{company_name}_cv.pdf', 'wb') as f:
+    # Make a folder for each job description to save PDF, .tex, and .tar files of tailored resume. 
+    os.makedirs(f'./CVs/{company_name}',exist_ok=True)
+    latex_compiler_reponse, _ = openai_wrapper.covert_plain_resume_to_latex(company_name, tailored_plain_resume, model, template)
+    # Path to save pdf file of tailored resume
+    pdf_path = f'./CVs/{company_name}/{APPLICANT_NAME}_cv.pdf'
+    with open(pdf_path, 'wb') as f:
         f.write(latex_compiler_reponse.content)
-    logger.debug(f"Generated resume saved at here: ./CVs/{company_name}_cv.pdf")
-    return {"success": f"Generated resume saved at here: ./CVs/{company_name}_cv.pdf",
-    "path": os.path.abspath(f"./CVs/{company_name}_cv.pdf")
+    logger.debug(f"Generated resume saved at here: {pdf_path}")
+    return {"success": f"Generated resume saved at here: {pdf_path}",
+    "path": os.path.abspath(pdf_path)
     }
