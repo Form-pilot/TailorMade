@@ -12,9 +12,13 @@ from models.templates import ResumeTemplate, Template_Details
 import os
 from utils import generate_tex_and_tar
 from config import TEX_FILE_NAME, TAR_FOLDER_NAME
+from langchain.output_parsers import PydanticOutputParser
+from langchain.prompts import PromptTemplate
+from langchain_openai import OpenAI
+from pydantic import BaseModel, Field
 
-client = OpenAI(api_key=OPEN_AI_KEY)  # we recommend using python-dotenv to add OPENAI_API_KEY="My API Key" to your .env file so that your API Key is not stored in source control.
-
+os.environ["OPENAI_API_KEY"] = OPEN_AI_KEY  # we recommend using python-dotenv to add OPENAI_API_KEY="My API Key" to your .env file so that your API Key is not stored in source control.
+client = OpenAI(api_key=OPEN_AI_KEY)
 class Eligibility(BaseModel):
     eligibility: bool = Field(..., description="Indicates eligibility: 'True' or 'False'.")
     reason: str = Field(..., description="Explanation of eligibility")
@@ -91,19 +95,31 @@ def ai_prompt(prompt: str, model=AIModel.gpt_4o_mini) -> str:
     return completion.choices[0].message.content
 
 def consider_eligibility(job_description: str, legal_authorization: str, model: AIModel = AIModel.gpt_4o_mini):
-    completion = client.beta.chat.completions.parse(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompts.consider_eligibility.format(legal_authorization=legal_authorization, job_description=job_description)}
-        ],
-        response_format=Eligibility
+     # Initialize the parser with our custom class
+    parser = PydanticOutputParser(pydantic_object=Eligibility)
+    
+    # Create a prompt template that includes formatting instructions
+    prompt_template = PromptTemplate(
+        template="{prompts}\n\n{format_instructions}\n",
+        input_variables=["prompts"],
+        partial_variables={"format_instructions": parser.get_format_instructions()}
     )
-    eligibility = json.loads(completion.choices[0].message.content)["eligibility"]
-    logger.debug(f"Is user eligible for this job: {eligibility}")
-    reason = json.loads(completion.choices[0].message.content)["reason"]
-    logger.debug(f"Reason of eligibility desicion: {reason}")
-    return eligibility, reason
+    
+    # Initialize the LLM
+    llm = OpenAI(model=model)
+    
+    # Finalize the prompt
+    final_prompt = prompts.consider_eligibility.format(legal_authorization=legal_authorization, job_description=job_description)
+    
+    # Get formatted prompt
+    formatted_prompt = prompt_template.format(prompts=final_prompt)
+
+    # Get response from LLM and parse it
+    response = llm.predict(formatted_prompt)
+    structured_response = parser.parse(response)
+
+    # Access the structured data
+    return structured_response.eligibility, structured_response.reason
 
 def consider_suitability(job_description: str, preferences: str, model: AIModel = AIModel.gpt_4o_mini):
     completion = client.beta.chat.completions.parse(
