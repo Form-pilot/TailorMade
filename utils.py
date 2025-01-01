@@ -55,7 +55,7 @@ def generate_pdf(company_name: str, tailored_plain_resume: str, tailoring_option
     # Make a folder for each job description to save PDF, .tex, and .tar files of tailored resume.
     os.makedirs(f'./CVs/{current_time}_{company_name}', exist_ok=True)
 
-    latex_compiler_response, _ = openai_wrapper.covert_plain_resume_to_latex(
+    latex_compiler_response, latex_code = openai_wrapper.covert_plain_resume_to_latex(
         current_time, company_name, tailored_plain_resume, tailoring_options.ai_model, tailoring_options.resume_template
     )
     # Path to save pdf file of tailored resume
@@ -63,4 +63,4 @@ def generate_pdf(company_name: str, tailored_plain_resume: str, tailoring_option
     with open(pdf_path, 'wb') as f:
         f.write(latex_compiler_response.content)
     logger.debug(f"Generated resume saved at here: {pdf_path}")
-    return pdf_path
+    return {"pdf_path": pdf_path, "latex_code": latex_code}

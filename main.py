@@ -9,7 +9,11 @@ from models.profile import Profile, Resume
 from utils import generate_pdf
 from log import logger
 from models.question import Question
-
+from dataclasses import dataclass
+@dataclass
+class PreviewRequest:
+    latex_code: str
+    tailoring_options: TailoringOptions
 
 app = FastAPI()
 
@@ -71,11 +75,13 @@ def generate_tailored_latex_resume_save(job: Job, profile: Profile = Profile(Res
         f"Give the name of the company that this job description is for. As the output just give the name, nothing else. Job description: {job.description}"
     )  # Since this is a simple task we use the cheapest ai
     
-    pdf_path = generate_pdf(company_name, tailored_plain_resume, tailoring_options)
-
+    cv = generate_pdf(company_name, tailored_plain_resume, tailoring_options)
+    latex_code = cv["latex_code"]
+    pdf_path = cv["pdf_path"]
     return {
         "success": f"Generated resume saved at here: {pdf_path}",
-        "path": os.path.abspath(pdf_path)
+        "path": os.path.abspath(pdf_path),
+        "latex_code": latex_code
     }
 
 @app.post("/answer-application-questions")
@@ -85,3 +91,10 @@ def answer_application_questions(job: Job, question: Question, profile: Profile 
     """
 
     return openai_wrapper.generate_answer_questions(profile.resume.text, job.description, question.description, tailoring_options.ai_model)
+
+@app.post("/save-latex-resume")
+def save_latex_resume(preview:PreviewRequest):
+    """
+    Saves the edited LaTeX code as PDF
+    """
+    return openai_wrapper.save_latex_code(preview.latex_code, preview.tailoring_options.resume_template)

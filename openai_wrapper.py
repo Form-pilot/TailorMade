@@ -12,6 +12,7 @@ from models.templates import ResumeTemplate, Template_Details
 import os
 from utils import generate_tex_and_tar
 from config import TEX_FILE_NAME, TAR_FOLDER_NAME
+from datetime import datetime
 
 client = OpenAI(api_key=OPEN_AI_KEY)  # we recommend using python-dotenv to add OPENAI_API_KEY="My API Key" to your .env file so that your API Key is not stored in source control.
 
@@ -193,3 +194,27 @@ def generate_answer_questions(resume: str, job_description: str, question: str, 
         response_format=TailoredAnswer
     )
     return json.loads(completion.choices[0].message.content)["tailored_answer"]
+
+def save_latex_code(latex_code: str, template: ResumeTemplate = ResumeTemplate.Blue_Modern_CV):
+    """
+    Saves the edited LaTeX code as final PDF
+    """
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    company_name = "edited-cv"
+    created_tar_file = generate_tex_and_tar(current_time, company_name, latex_code, TEX_FILE_NAME, TAR_FOLDER_NAME)
+    
+    with open(created_tar_file, 'rb') as tar_file:
+        files = {'file': (os.path.basename(created_tar_file), tar_file, "application/x-tar")}
+        latex_compiler_response = requests.post(
+            url=LaTeX_COMPILER_URL_DATA.format(
+                tex_folder_path=f"{TAR_FOLDER_NAME}/{TEX_FILE_NAME}.tex",
+                compiler=Template_Details[template]['compiler']
+            ),
+            files=files
+        )
+    os.makedirs("CVs/edited-cv", exist_ok=True)
+    pdf_path = f"CVs/edited-cv/{current_time}.pdf"
+    with open(pdf_path, 'wb') as f:
+        f.write(latex_compiler_response.content)
+    
+    return {"path": os.path.abspath(pdf_path)}
